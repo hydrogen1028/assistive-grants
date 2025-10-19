@@ -113,7 +113,7 @@ def pick_best_image(paths, target_width=1200):
     for p in local:
         try:
             with Image.open(p) as im:
-                w, h = im.size
+                w, _ = im.size
             diff = abs(w - target_width)
             cand.append((diff, w >= target_width, w, p))
         except Exception:
@@ -254,11 +254,11 @@ def show_qr_dialog(d: dict):
             st.image(qr, caption=url, use_column_width=True)
 
 # ---------- Search / Controls ----------
-st.title("輔助器具補助查詢")
+st.title("輔具補助查詢")
 
 q = st.text_input("搜尋輔具名稱或別名", placeholder="輸入：輪椅、助行器、移位帶、助聽器…")
 
-# ---- 全品項下拉（含別名）避免無限 rerun ----
+# ---- 全品項下拉（含別名）以 on_change callback 避免無限 rerun 與同名寫入錯誤 ----
 PLACEHOLDER = "— 直接選擇 —"
 
 # 建立 label -> id 對照
@@ -272,26 +272,28 @@ for d in devices:
         labels.append(lbl)
         label_to_id[lbl] = d["id"]
 
-# 初始化選單的 state
+# 初始化 widget state（要在建立 selectbox 之前做）
 if "select_all_devices" not in st.session_state:
     st.session_state["select_all_devices"] = PLACEHOLDER
 
-picked = st.selectbox(
+def _on_pick_change():
+    picked = st.session_state["select_all_devices"]
+    if picked == PLACEHOLDER:
+        return
+    new_id = label_to_id[picked]
+    # 導向詳細頁
+    st.session_state["selected_id"] = new_id
+    st.session_state["view"] = "detail"
+    # 重設下拉為 placeholder，避免下一輪 rerun 再觸發
+    st.session_state["select_all_devices"] = PLACEHOLDER
+    st.rerun()
+
+st.selectbox(
     "📋 直接選擇輔具（含別名）",
     [PLACEHOLDER] + labels,
-    key="select_all_devices"
+    key="select_all_devices",
+    on_change=_on_pick_change,
 )
-
-# 只在「真的換到新項目」時才導向詳細頁，並且在導向後把下拉重設為 placeholder，避免再次觸發
-if picked != PLACEHOLDER:
-    new_id = label_to_id[picked]
-    prev_id = st.session_state.get("selected_id")
-    prev_view = st.session_state.get("view")
-    if (prev_id != new_id) or (prev_view != "detail"):
-        st.session_state["selected_id"] = new_id
-        st.session_state["view"] = "detail"
-        st.session_state["select_all_devices"] = PLACEHOLDER
-        st.rerun()
 
 program = st.radio("體系過濾", ["全部", "LTC", "PWD"], index=0, horizontal=True)
 
